@@ -386,10 +386,13 @@ let sessionIdx = 0;
 let sessionRatings = {1:0,2:0,3:0,4:0};
 let cardRevealed = false;
 
-function showScreen(id) {
+function showScreen(id, historyState) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   window.scrollTo(0, 0);
+  if (historyState !== false) {
+    history.pushState({ screen: id, bookIndex: currentBookIndex, chapterIndex: currentChapterIndex }, '', '');
+  }
 }
 
 function showHome() {
@@ -418,6 +421,69 @@ function showChapters(bookIndex) {
   });
   showScreen('chapters');
 }
+
+// ── Handle swipe-back / browser back ──
+window.addEventListener('popstate', e => {
+  const state = e.state;
+  if (!state) {
+    // No state means we've gone back beyond our app — just restore home view without pushing
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById('home').classList.add('active');
+    updateHeader();
+    return;
+  }
+  // Restore the previous screen without pushing a new history entry
+  if (state.screen === 'home') {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById('home').classList.add('active');
+    updateHeader();
+  } else if (state.screen === 'chapters' && state.bookIndex != null) {
+    currentBookIndex = state.bookIndex;
+    const book = VOCAB_DATA.books[state.bookIndex];
+    document.getElementById('chapters-title').textContent = formatBookName(book.name);
+    const list = document.getElementById('chapter-list');
+    list.innerHTML = '';
+    book.chapters.forEach((ch, i) => {
+      const chWords = ALL_WORDS.filter(w => w.book === book.name && w.chapter === ch.chapter);
+      const dueCount = chWords.filter(isDue).length;
+      const seenCount = chWords.filter(w => w.seen > 0).length;
+      const el = document.createElement('div');
+      el.className = 'chapter-item';
+      const label = book.chapters.length === 1 ? formatBookName(book.name) : 'Chapter ' + ch.chapter;
+      const dueStr = dueCount > 0 ? ` · <span style="color:var(--rust);font-weight:700;">${dueCount} due</span>` : '';
+      const seenStr = seenCount > 0 ? ` · ${seenCount}/${chWords.length} seen` : '';
+      el.innerHTML = `<span class="chapter-label">${label}</span><span class="chapter-count">${ch.words.length} words${seenStr}${dueStr}</span><span class="chapter-arrow">→</span>`;
+      el.onclick = () => startStudy(state.bookIndex, i);
+      list.appendChild(el);
+    });
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById('chapters').classList.add('active');
+    window.scrollTo(0, 0);
+  } else if ((state.screen === 'study' || state.screen === 'results') && state.bookIndex != null) {
+    // Swiping back from study/results → go to chapter list
+    currentBookIndex = state.bookIndex;
+    const book = VOCAB_DATA.books[state.bookIndex];
+    document.getElementById('chapters-title').textContent = formatBookName(book.name);
+    const list = document.getElementById('chapter-list');
+    list.innerHTML = '';
+    book.chapters.forEach((ch, i) => {
+      const chWords = ALL_WORDS.filter(w => w.book === book.name && w.chapter === ch.chapter);
+      const dueCount = chWords.filter(isDue).length;
+      const seenCount = chWords.filter(w => w.seen > 0).length;
+      const el = document.createElement('div');
+      el.className = 'chapter-item';
+      const label = book.chapters.length === 1 ? formatBookName(book.name) : 'Chapter ' + ch.chapter;
+      const dueStr = dueCount > 0 ? ` · <span style="color:var(--rust);font-weight:700;">${dueCount} due</span>` : '';
+      const seenStr = seenCount > 0 ? ` · ${seenCount}/${chWords.length} seen` : '';
+      el.innerHTML = `<span class="chapter-label">${label}</span><span class="chapter-count">${ch.words.length} words${seenStr}${dueStr}</span><span class="chapter-arrow">→</span>`;
+      el.onclick = () => startStudy(state.bookIndex, i);
+      list.appendChild(el);
+    });
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById('chapters').classList.add('active');
+    window.scrollTo(0, 0);
+  }
+});
 
 function formatBookName(name) {
   const names = {
@@ -608,6 +674,8 @@ function importProgress() {
 // ── Init ──
 loadState();
 updateHeader();
+// Seed initial history state so popstate has a baseline
+history.replaceState({ screen: 'home', bookIndex: null, chapterIndex: null }, '');
 </script>
 </body>
 </html>
