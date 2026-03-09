@@ -131,7 +131,7 @@
   <div class="screen active" id="screen-home">
     <div class="greek-ornament">α β γ δ ε</div>
     <h1 class="home-title">Greek Vocabulary<br>Review</h1>
-    <p class="home-subtitle">Corpus-driven study</p>
+    <p class="home-subtitle">Corpus-driven study — every word seen in its scriptural context, rated by difficulty, spaced for retention.</p>
     <div class="filter-panel">
       <h3>Session Settings</h3>
       <div class="filter-grid">
@@ -139,11 +139,14 @@
           <label>Frequency Filter</label>
           <select id="filter-freq">
             <option value="all">All Words</option>
-            <option value="500">500+ occurrences</option>
-            <option value="200">200+ occurrences</option>
-            <option value="100">100+ occurrences</option>
-            <option value="50">50+ occurrences</option>
-            <option value="10">10+ occurrences</option>
+            <option value="100+">100+ occurrences</option>
+            <option value="40-99">99–40 occurrences</option>
+            <option value="20-39">39–20 occurrences</option>
+            <option value="15-19">19–15 occurrences</option>
+            <option value="10-14">14–10 occurrences</option>
+            <option value="5-9">9–5 occurrences</option>
+            <option value="2-4">4–2 occurrences</option>
+            <option value="hapax">Hapax (1 occurrence)</option>
             <option value="due">Due for review only</option>
           </select>
         </div>
@@ -307,11 +310,15 @@ function getPOS(tags) {
   return tags.find(t => !t.match(/^[0-9]/) && !t.startsWith('pref') && !t.startsWith('suf') && !t.startsWith('hapax')) || '';
 }
 function getFreqLabel(freq) {
-  if (freq >= 500) return freq+'× (very common)';
-  if (freq >= 100) return freq+'× (common)';
-  if (freq >= 50)  return freq+'× (moderate)';
-  if (freq > 0)    return freq+'×';
-  return 'hapax / rare';
+  if (freq >= 100) return freq+' occurrences (very common)';
+  if (freq >= 40)  return freq+' occurrences (common)';
+  if (freq >= 20)  return freq+' occurrences';
+  if (freq >= 15)  return freq+' occurrences';
+  if (freq >= 10)  return freq+' occurrences';
+  if (freq >= 5)   return freq+' occurrences';
+  if (freq >= 2)   return freq+' occurrences';
+  if (freq === 1)  return 'Hapax (1 occurrence)';
+  return 'Rare / unattested';
 }
 
 // ── Verse display ──
@@ -359,8 +366,16 @@ function getFilteredWords() {
   const freqVal = document.getElementById('filter-freq').value;
   const posVal  = document.getElementById('filter-pos').value;
   let words = VOCAB.filter(w => {
-    if (freqVal === 'due') return isDue(w);
-    if (freqVal !== 'all' && w.frequency < parseInt(freqVal)) return false;
+    if (freqVal === 'due') return isDue(w) && w.frequency > 0;
+    if (freqVal === 'all' && w.frequency === 0) return false;
+    if (freqVal === 'hapax' && w.frequency !== 1) return false;
+    if (freqVal === '100+' && w.frequency < 100) return false;
+    if (freqVal === '40-99' && (w.frequency < 40 || w.frequency > 99)) return false;
+    if (freqVal === '20-39' && (w.frequency < 20 || w.frequency > 39)) return false;
+    if (freqVal === '15-19' && (w.frequency < 15 || w.frequency > 19)) return false;
+    if (freqVal === '10-14' && (w.frequency < 10 || w.frequency > 14)) return false;
+    if (freqVal === '5-9'   && (w.frequency < 5  || w.frequency > 9))  return false;
+    if (freqVal === '2-4'   && (w.frequency < 2  || w.frequency > 4))  return false;
     if (posVal !== 'all' && !w.tags.includes(posVal)) return false;
     return true;
   });
@@ -370,9 +385,10 @@ function getFilteredWords() {
   return [...due, ...unseen, ...seen];
 }
 
-function showScreen(id) {
+function showScreen(id, pushState = true) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
+  if (pushState) pushAppState(id);
   if (id === 'screen-home') updateHomeCounts();
   if (id === 'screen-stats') updateStats();
 }
@@ -480,8 +496,26 @@ document.addEventListener('keydown', e => {
   }
 });
 
+// ── Back-navigation fix ──
+// Push a state so the browser "back" gesture stays within the app
+function pushAppState(screenId) {
+  history.pushState({ screen: screenId }, '', '');
+}
+window.addEventListener('popstate', function(e) {
+  // If we have a state, go back to home screen instead of leaving the app
+  const activeScreen = document.querySelector('.screen.active');
+  if (activeScreen && activeScreen.id !== 'screen-home') {
+    showScreen('screen-home');
+    pushAppState('screen-home');
+  } else {
+    // Already on home — push state again to prevent leaving
+    pushAppState('screen-home');
+  }
+});
+
 // ── Init ──
 loadState();
+pushAppState('screen-home');
 updateHomeCounts();
 document.getElementById('session-size').addEventListener('input', function() {
   document.getElementById('count-display').textContent = this.value;
